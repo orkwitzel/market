@@ -1,0 +1,34 @@
+name: pr-checks
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+# Both jobs are required status checks on main (see .github/rulesets/protect-main.json); keep the job names stable.
+jobs:
+  branch-name:
+    name: branch-name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check branch name
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: scripts/check-branch-name.sh "$HEAD_REF"
+
+  pr-body:
+    name: pr-body
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check PR body against the template
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/check-pr-body.py

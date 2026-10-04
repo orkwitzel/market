@@ -37,8 +37,8 @@ src/market/
 web/            React frontend
 tests/          pytest suite (synthetic data only), incl. the look-ahead test
 docs/adr/       architecture decision records
-scripts/        repo tooling (branch-name check, GitHub settings)
-.github/        CI workflows and the main-branch ruleset
+scripts/        repo tooling (branch-name and PR-body checks, GitHub settings)
+.github/        CI workflows, PR template and the main-branch ruleset
 ```
 
 ## Commands (once scaffolding lands)
@@ -67,7 +67,7 @@ The five default labels, unchanged: `needs-triage`, `needs-info`, `ready-for-age
 
 ### Git workflow
 
-`main` is protected: changes land only through a squash-merged pull request, and branch names must follow `<type>/<short-kebab-description>` (Claude Code sessions use `claude/<slug>`), checked in CI by `scripts/check-branch-name.sh`. See `docs/agents/git-workflow.md`.
+`main` is protected: changes land only through a squash-merged pull request, and branch names must follow `<type>/<short-kebab-description>` (Claude Code sessions use `claude/<slug>`), checked in CI by `scripts/check-branch-name.sh`. PR descriptions follow `.github/pull_request_template.md` (Summary and Testing required, checked in CI). See `docs/agents/git-workflow.md`.
 
 ### Domain docs
 
