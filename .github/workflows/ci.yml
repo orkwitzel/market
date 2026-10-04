@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same PR; pushes to main always run to completion.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Synthetic fixtures only: no market data, no secrets (AGENTS.md ground rule 4).
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python 3.14
+        uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+      - name: Format (ruff format --check)
+        run: uv run ruff format --check .
+      - name: Type check (pyright)
+        run: uv run pyright
+      - name: Test (pytest)
+        run: uv run pytest
