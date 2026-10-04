@@ -41,11 +41,11 @@ scripts/        repo tooling (branch-name and PR-body checks, GitHub settings)
 .github/        CI workflows, PR template and the main-branch ruleset
 ```
 
-## Commands (once scaffolding lands)
+## Commands
 
 ```sh
 uv sync                      # install
-uv run pytest                # tests, including the look-ahead test
+uv run pytest                # tests (synthetic data only)
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
 uv run market --help         # CLI

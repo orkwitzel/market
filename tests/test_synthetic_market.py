@@ -8,24 +8,33 @@ from polars.testing import assert_frame_equal
 from synthetic_market import (
     CORPORATE_EVENTS_SCHEMA,
     DELIST_LAST_DATE,
+    DELISTED_ID,
     DIVIDEND_AMOUNT,
     DIVIDEND_DATE,
+    DIVIDEND_ID,
     JOIN_DATE,
     MEMBERSHIP_SCHEMA,
     PRICES_SCHEMA,
     REMOVAL_DATE,
+    REMOVED_ID,
     RENAME_DATE,
+    RENAMED_ID,
     REUSE_JOIN_DATE,
     REUSE_LIST_DATE,
+    REUSED_TICKER_ID,
     SECURITIES_SCHEMA,
     SPLIT_DATE,
+    SPLIT_ID,
     SPLIT_RATIO,
     TICKERS_SCHEMA,
     SyntheticMarket,
     generate_synthetic_market,
+    next_trading_day,
+    previous_trading_day,
 )
 
-CENT = 0.005
+# Prices are rounded to the cent, so exact jumps hold to within half a cent.
+ROUNDING_TOLERANCE = 0.005
 
 
 def _members_on(market: SyntheticMarket, day: date) -> set[str]:
@@ -35,16 +44,16 @@ def _members_on(market: SyntheticMarket, day: date) -> set[str]:
     return set(m["security_id"].to_list())
 
 
-def _closes(market: SyntheticMarket, security_id: str) -> pl.DataFrame:
+def _bars(market: SyntheticMarket, security_id: str) -> pl.DataFrame:
     return market.prices.filter(pl.col("security_id") == security_id).sort("date")
 
 
-def _close_before_and_on(
+def _prev_close_and_open(
     market: SyntheticMarket, security_id: str, day: date
 ) -> tuple[float, float]:
-    p = _closes(market, security_id)
+    p = _bars(market, security_id)
     i = p["date"].to_list().index(day)
-    return p["close"][i - 1], p["close"][i]
+    return p["close"][i - 1], p["open"][i]
 
 
 def test_schemas(synthetic_market: SyntheticMarket) -> None:
@@ -96,45 +105,53 @@ def test_ids_distinct_from_tickers(synthetic_market: SyntheticMarket) -> None:
 
 def test_split_raw_price_jump(synthetic_market: SyntheticMarket) -> None:
     events = synthetic_market.corporate_events.filter(pl.col("event_type") == "split")
-    assert events.rows() == [("S1", SPLIT_DATE, "split", SPLIT_RATIO, None)]
-    before, on = _close_before_and_on(synthetic_market, "S1", SPLIT_DATE)
-    assert on == pytest.approx(before / SPLIT_RATIO, abs=CENT)
+    assert events.rows() == [(SPLIT_ID, SPLIT_DATE, "split", SPLIT_RATIO, None)]
+    prev_close, open_ = _prev_close_and_open(synthetic_market, SPLIT_ID, SPLIT_DATE)
+    assert open_ == pytest.approx(prev_close / SPLIT_RATIO, abs=ROUNDING_TOLERANCE)
 
 
 def test_dividend_ex_date_drop(synthetic_market: SyntheticMarket) -> None:
     events = synthetic_market.corporate_events.filter(pl.col("event_type") == "dividend")
-    assert events.rows() == [("S2", DIVIDEND_DATE, "dividend", None, DIVIDEND_AMOUNT)]
-    before, on = _close_before_and_on(synthetic_market, "S2", DIVIDEND_DATE)
-    assert on == pytest.approx(before - DIVIDEND_AMOUNT, abs=CENT)
+    assert events.rows() == [(DIVIDEND_ID, DIVIDEND_DATE, "dividend", None, DIVIDEND_AMOUNT)]
+    prev_close, open_ = _prev_close_and_open(synthetic_market, DIVIDEND_ID, DIVIDEND_DATE)
+    assert open_ == pytest.approx(prev_close - DIVIDEND_AMOUNT, abs=ROUNDING_TOLERANCE)
+
+
+def test_event_days_are_not_flat(synthetic_market: SyntheticMarket) -> None:
+    events = synthetic_market.corporate_events.select("security_id", "date")
+    bars = synthetic_market.prices.join(events, on=["security_id", "date"])
+    assert bars.height == events.height
+    assert bars.filter(pl.col("open") == pl.col("close")).is_empty()
 
 
 def test_delisting(synthetic_market: SyntheticMarket) -> None:
     days = synthetic_market.trading_days
-    s5 = _closes(synthetic_market, "S5")
+    s5 = _bars(synthetic_market, DELISTED_ID)
     assert s5["date"].max() == DELIST_LAST_DATE < days[-1]
-    next_day = days[days.index(DELIST_LAST_DATE) + 1]
-    assert "S5" in _members_on(synthetic_market, DELIST_LAST_DATE)
-    assert "S5" not in _members_on(synthetic_market, next_day)
+    next_day = next_trading_day(days, DELIST_LAST_DATE)
+    assert DELISTED_ID in _members_on(synthetic_market, DELIST_LAST_DATE)
+    assert DELISTED_ID not in _members_on(synthetic_market, next_day)
 
 
 def test_index_removal_keeps_trading(synthetic_market: SyntheticMarket) -> None:
     days = synthetic_market.trading_days
-    before = days[days.index(REMOVAL_DATE) - 1]
-    assert "S3" in _members_on(synthetic_market, before)
-    assert "S3" not in _members_on(synthetic_market, REMOVAL_DATE)
-    assert _closes(synthetic_market, "S3")["date"].max() == days[-1]
+    before = previous_trading_day(days, REMOVAL_DATE)
+    assert REMOVED_ID in _members_on(synthetic_market, before)
+    assert REMOVED_ID not in _members_on(synthetic_market, REMOVAL_DATE)
+    assert _bars(synthetic_market, REMOVED_ID)["date"].max() == days[-1]
 
 
 def test_index_join_with_prior_history(synthetic_market: SyntheticMarket) -> None:
     days = synthetic_market.trading_days
-    assert "S4" not in _members_on(synthetic_market, days[days.index(JOIN_DATE) - 1])
-    assert "S4" in _members_on(synthetic_market, JOIN_DATE)
-    first_priced: date = _closes(synthetic_market, "S4")["date"][0]
+    day_before = previous_trading_day(days, JOIN_DATE)
+    assert RENAMED_ID not in _members_on(synthetic_market, day_before)
+    assert RENAMED_ID in _members_on(synthetic_market, JOIN_DATE)
+    first_priced: date = _bars(synthetic_market, RENAMED_ID)["date"][0]
     assert first_priced < JOIN_DATE
 
 
 def test_ticker_change(synthetic_market: SyntheticMarket) -> None:
-    s4 = synthetic_market.tickers.filter(pl.col("security_id") == "S4")
+    s4 = synthetic_market.tickers.filter(pl.col("security_id") == RENAMED_ID)
     assert s4.select("ticker", "start_date", "end_date").rows() == [
         ("DLTA", synthetic_market.trading_days[0], RENAME_DATE),
         ("DLTX", RENAME_DATE, None),
@@ -143,13 +160,13 @@ def test_ticker_change(synthetic_market: SyntheticMarket) -> None:
 
 def test_ticker_reuse(synthetic_market: SyntheticMarket) -> None:
     echo = synthetic_market.tickers.filter(pl.col("ticker") == "ECHO").sort("start_date")
-    assert echo["security_id"].to_list() == ["S5", "S6"]
+    assert echo["security_id"].to_list() == [DELISTED_ID, REUSED_TICKER_ID]
     old_end, new_start = echo["end_date"][0], echo["start_date"][1]
     assert old_end is not None and old_end <= new_start == REUSE_LIST_DATE
-    s6 = _closes(synthetic_market, "S6")
+    s6 = _bars(synthetic_market, REUSED_TICKER_ID)
     assert s6["date"].min() == REUSE_LIST_DATE > DELIST_LAST_DATE
-    assert "S6" in _members_on(synthetic_market, REUSE_JOIN_DATE)
-    assert "S6" not in _members_on(synthetic_market, REUSE_LIST_DATE)
+    assert REUSED_TICKER_ID in _members_on(synthetic_market, REUSE_JOIN_DATE)
+    assert REUSED_TICKER_ID not in _members_on(synthetic_market, REUSE_LIST_DATE)
 
 
 def test_members_always_have_prices(synthetic_market: SyntheticMarket) -> None:

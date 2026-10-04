@@ -3,20 +3,17 @@
 import pytest
 from typer.testing import CliRunner
 
-from market.cli import NOT_IMPLEMENTED_EXIT_CODE, app
+from market.cli import IMPLEMENTING_ISSUE, NOT_IMPLEMENTED_EXIT_CODE, app
 
 runner = CliRunner()
 
 
-@pytest.mark.parametrize(
-    ("args", "issue"),
-    [(["run"], 7), (["serve"], 19), (["data", "update"], 4)],
-)
-def test_stub_command_reports_not_implemented(args: list[str], issue: int) -> None:
-    result = runner.invoke(app, args)
+@pytest.mark.parametrize("command", sorted(IMPLEMENTING_ISSUE))
+def test_stub_command_reports_not_implemented(command: str) -> None:
+    result = runner.invoke(app, command.split())
     assert result.exit_code == NOT_IMPLEMENTED_EXIT_CODE != 0
     assert "not implemented yet" in result.output
-    assert f"#{issue}" in result.output
+    assert f"#{IMPLEMENTING_ISSUE[command]}" in result.output
 
 
 def test_help_lists_commands() -> None:

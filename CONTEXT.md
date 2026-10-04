@@ -21,6 +21,7 @@ Decisions behind these terms live in [`docs/adr/`](docs/adr/).
 ### Universe and data
 
 - **Universe** — the stocks the bot may trade on a given date: the members of the S&P 500 on that date (point-in-time membership) that have price data. ETFs are not in the universe.
+- **Security** — one company's listed stock, identified by a stable security id that never changes. A ticker is only a label for a period: a security can change ticker, and a reused ticker belongs to two different securities. _Avoid_: using the ticker as an identifier.
 - **Point-in-time membership** — index membership as it actually was on each historical date, including companies that later went bankrupt, were acquired or were removed.
 - **Survivorship bias** — the distortion caused by only looking at companies that survived to today. The point-in-time universe exists to avoid it.
 - **Coverage** — the share of index members on a date that have usable price data. A run may only have a drop date where coverage (through the warm-up) is at least the **coverage threshold** (default 85%).
