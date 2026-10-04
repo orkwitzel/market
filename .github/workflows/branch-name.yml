@@ -1,0 +1,22 @@
+name: branch-name
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  # Required status check on main (see .github/rulesets/protect-main.json); keep the job name stable.
+  branch-name:
+    name: branch-name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check branch name
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: scripts/check-branch-name.sh "$HEAD_REF"

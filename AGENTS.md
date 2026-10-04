@@ -37,6 +37,8 @@ src/market/
 web/            React frontend
 tests/          pytest suite (synthetic data only), incl. the look-ahead test
 docs/adr/       architecture decision records
+scripts/        repo tooling (branch-name check, GitHub settings)
+.github/        CI workflows and the main-branch ruleset
 ```
 
 ## Commands (once scaffolding lands)
@@ -62,6 +64,10 @@ Issues live in this repo's GitHub Issues, managed with the `gh` CLI. See `docs/a
 ### Triage labels
 
 The five default labels, unchanged: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Git workflow
+
+`main` is protected: changes land only through a squash-merged pull request, and branch names must follow `<type>/<short-kebab-description>` (Claude Code sessions use `claude/<slug>`), checked in CI by `scripts/check-branch-name.sh`. See `docs/agents/git-workflow.md`.
 
 ### Domain docs
 
