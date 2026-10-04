@@ -41,7 +41,7 @@ Check a body locally: `PR_BODY="$(cat body.md)" scripts/check-pr-body.py`.
 ## For agents
 
 - Never push to `main`, and never try to work around the ruleset (no force-push, no admin bypass, no editing the ruleset to get a change in).
-- Branch off the latest `main` with a name that passes the check, open a PR, and let it be squash-merged.
+- Branch off the latest `main` with a name that passes the check, in a worktree of its own (`scripts/new-worktree.sh <branch>`, see [worktrees.md](worktrees.md)), open a PR, and let it be squash-merged.
 - Write the PR title as the final commit message and fill in the PR template (when creating a PR through an API, copy the template's headings into the body): the title and body become the commit on `main`.
 - After a merge the remote branch is gone. Start follow-up work on a fresh branch from `main`; don't reuse the merged one.
 

@@ -44,7 +44,8 @@ scripts/        repo tooling (branch-name and PR-body checks, GitHub settings)
 ## Commands
 
 ```sh
-uv sync                      # install
+scripts/setup.sh             # set up this checkout or worktree (uv sync, web deps, shared data/.env)
+uv sync                      # install Python deps only
 uv run pytest                # tests (synthetic data only)
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
@@ -68,6 +69,10 @@ The five default labels, unchanged: `needs-triage`, `needs-info`, `ready-for-age
 ### Git workflow
 
 `main` is protected: changes land only through a squash-merged pull request, and branch names must follow `<type>/<short-kebab-description>` (Claude Code sessions use `claude/<slug>`), checked in CI by `scripts/check-branch-name.sh`. PR descriptions follow `.github/pull_request_template.md` (Summary and Testing required, checked in CI). See `docs/agents/git-workflow.md`.
+
+### Worktrees
+
+Do every task in its own git worktree under `.claude/worktrees/`, never directly in the main checkout. Create one with `scripts/new-worktree.sh <branch>` (new branch from the latest `origin/main`, app set up); in a worktree the harness made, run `scripts/setup.sh` first. Keep `scripts/setup.sh` current when setup changes. See `docs/agents/worktrees.md`.
 
 ### Domain docs
 
