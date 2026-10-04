@@ -1,5 +1,6 @@
-# Market data, run recordings and secrets: never commit (licenses forbid redistribution)
-/data/
+# Market data, run recordings and secrets: never commit (licenses forbid redistribution).
+# /data has no trailing slash so it also matches the symlink scripts/setup.sh puts in worktrees.
+/data
 /runs/
 *.parquet
 *.duckdb
@@ -25,6 +26,10 @@ build/
 # Frontend
 node_modules/
 web/dist/
+
+# Claude Code: task worktrees and personal settings
+/.claude/worktrees/
+/.claude/settings.local.json
 
 # Editors / OS
 .idea/
