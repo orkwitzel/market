@@ -30,3 +30,6 @@ web/dist/
 .idea/
 .vscode/
 .DS_Store
+
+# Claude Code local worktrees
+.claude/worktrees/
