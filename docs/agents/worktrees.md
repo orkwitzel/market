@@ -26,7 +26,7 @@ When setup gains a step (a new tool, a generated file, a database migration), ad
 ## Rules for agents
 
 - Do all edits, commands and commits from inside the task's worktree. Don't `cd` back to the main checkout, and never commit there.
-- Only touch the shared `data/` through the app (`market data update`); a worktree writes to the same store as every other checkout.
+- Only touch the shared `data/` through the app (`market data update`, `market data membership`); a worktree writes to the same store as every other checkout.
 - The git stash is shared by all worktrees. Set work aside with a WIP commit on your branch, not `git stash`.
 - One branch per worktree; git refuses to check out a branch that is already checked out in another one.
 
