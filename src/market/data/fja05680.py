@@ -275,7 +275,9 @@ def fetch_text(url: str) -> str:
 def update_membership_store(directory: Path, ref: str = PINNED_REF) -> Membership:
     """Download the upstream files at ``ref``, build membership and save it to ``directory``."""
     membership = build_membership(
-        fetch_text(raw_url(COMPONENTS_FILE, ref)), fetch_text(raw_url(CHANGES_FILE, ref))
+        fetch_text(raw_url(COMPONENTS_FILE, ref)),
+        fetch_text(raw_url(CHANGES_FILE, ref)),
+        curation=CURATION,
     )
     membership.save(directory)
     return membership

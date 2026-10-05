@@ -1,9 +1,6 @@
 """Building point-in-time membership from fja05680/sp500-shaped files.
 
-The inputs are tiny CSV strings written here that mimic the upstream formats: the original
-suffixed components file (CRLF, unsorted tickers, ``TICKER-YYYYMM`` delisting suffixes,
-class tickers with dots, an unsuffixed/suffixed alias artifact) and the changes file
-(quoted lists, empty cells, trailing blank lines). No real data (ADR 0007).
+Inputs are the synthetic CSV strings in ``tests/synthetic_sp500.py``; no real data (ADR 0007).
 """
 
 from dataclasses import replace
@@ -11,6 +8,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from synthetic_sp500 import CHANGES, COMPONENTS, TEST_CURATION
 
 from market.data import fja05680
 from market.data.fja05680 import (
@@ -24,40 +22,7 @@ from market.data.fja05680 import (
     split_symbol,
 )
 from market.data.membership import JOIN, LEAVE, Membership
-from market.data.sp500_curation import CURATION, Correction, Curation, Rename
-
-COMPONENTS = "\r\n".join(
-    [
-        "date,tickers",
-        '1996-01-02,"XYZ,BAC,BAC-199601,AET,BRK.B"',
-        '1996-01-10,"BAC-199601,BAC,AET-199604,AET,BRK.B,XYZ"',
-        '1996-02-01,"BRK.B,BAC,AET-199604,OLD-199603"',
-        '1996-03-01,"XYZ,BAC,AET-199604,BRK.B"',
-        "",
-    ]
-)
-
-CHANGES = "\n".join(
-    [
-        "date,add,remove",
-        '1996-04-01,"OLD","AET"',
-        '1996-05-01,"XYZW","XYZ"',
-        '1996-06-03,"XYZ",""',
-        '1996-07-01,"","BAC"',
-        '1996-08-01,"BAC",""',
-        '1996-09-03,"ZED","OLD"',
-        "",
-        "",
-        "",
-    ]
-)
-
-TEST_CURATION = Curation(
-    aliases={"AET": "AET-199604"},
-    renames=(Rename(date(1996, 5, 1), "XYZ", "XYZW"),),
-    corrections=(Correction(date(1996, 2, 15), added=("LIN",), reason="missing upstream"),),
-    reused_ticker_adds=frozenset(),
-)
+from market.data.sp500_curation import CURATION, Curation, Rename
 
 
 def build(
