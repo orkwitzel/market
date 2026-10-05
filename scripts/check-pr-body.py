@@ -38,7 +38,9 @@ def main() -> int:
             problems.append(f"the '## {heading}' section is empty")
 
     if problems:
-        print("error: the PR body does not follow .github/pull_request_template.md:", file=sys.stderr)
+        print(
+            "error: the PR body does not follow .github/pull_request_template.md:", file=sys.stderr
+        )
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         print("Edit the PR description; this check re-runs automatically.", file=sys.stderr)

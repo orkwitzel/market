@@ -9,7 +9,7 @@ Defined in [`.github/rulesets/protect-main.json`](../../.github/rulesets/protect
 - **No direct pushes.** Changes land only by merging a pull request.
 - **No force-pushes and no deletion** of `main`; history stays linear.
 - **Squash merge only.** Each PR becomes one commit on `main`, titled with the PR title. Merge commits and rebase merges are turned off.
-- **Required checks:** the `branch-name` and `pr-body` CI jobs must pass before merging.
+- **Required checks:** the `branch-name` and `pr-body` CI jobs must pass before merging. The `ci` workflow ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): ruff, pyright, pytest) also runs on every PR and push to `main` but is not a required check yet.
 - **Head branches are deleted automatically** once their PR is merged.
 
 ## Branch naming
