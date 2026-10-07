@@ -67,14 +67,15 @@ def update() -> None:
 @data_app.command()
 def membership(
     data_dir: Annotated[Path, typer.Option(help="The local market-data store.")] = DEFAULT_DATA_DIR,
-    ref: Annotated[
-        str, typer.Option(help="fja05680/sp500 commit to download.")
-    ] = fja05680.PINNED_REF,
 ) -> None:
-    """Download fja05680/sp500 and rebuild the point-in-time S&P 500 membership store."""
+    """Download fja05680/sp500 and rebuild the point-in-time S&P 500 membership store.
+
+    Always builds from the pinned upstream commit (ADR 0010), so the shared store matches
+    the curated identity fixes.
+    """
     target = data_dir / MEMBERSHIP_DIR
     try:
-        built = fja05680.update_membership_store(target, ref=ref)
+        built = fja05680.update_membership_store(target)
     except URLError as error:
         typer.echo(f"Download from {fja05680.SOURCE_REPO} failed: {error.reason}", err=True)
         raise typer.Exit(code=1) from error

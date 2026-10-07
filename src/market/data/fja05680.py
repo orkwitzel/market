@@ -272,11 +272,11 @@ def fetch_text(url: str) -> str:
     return body.decode("utf-8-sig")
 
 
-def update_membership_store(directory: Path, ref: str = PINNED_REF) -> Membership:
-    """Download the upstream files at ``ref``, build membership and save it to ``directory``."""
+def update_membership_store(directory: Path) -> Membership:
+    """Download the upstream files at the pinned commit, build membership, save it."""
     membership = build_membership(
-        fetch_text(raw_url(COMPONENTS_FILE, ref)),
-        fetch_text(raw_url(CHANGES_FILE, ref)),
+        fetch_text(raw_url(COMPONENTS_FILE)),
+        fetch_text(raw_url(CHANGES_FILE)),
         curation=CURATION,
     )
     membership.save(directory)

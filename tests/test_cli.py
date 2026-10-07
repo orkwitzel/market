@@ -41,15 +41,13 @@ def test_data_membership_downloads_builds_and_saves(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     files = {
-        fja05680.raw_url(fja05680.COMPONENTS_FILE, "abc123"): COMPONENTS,
-        fja05680.raw_url(fja05680.CHANGES_FILE, "abc123"): CHANGES,
+        fja05680.raw_url(fja05680.COMPONENTS_FILE): COMPONENTS,
+        fja05680.raw_url(fja05680.CHANGES_FILE): CHANGES,
     }
     monkeypatch.setattr(fja05680, "fetch_text", files.__getitem__)
     monkeypatch.setattr(fja05680, "CURATION", TEST_CURATION)
 
-    result = runner.invoke(
-        app, ["data", "membership", "--data-dir", str(tmp_path), "--ref", "abc123"]
-    )
+    result = runner.invoke(app, ["data", "membership", "--data-dir", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
     stored = Membership.load(tmp_path / MEMBERSHIP_DIR)
@@ -67,3 +65,9 @@ def test_data_membership_reports_download_failure(
     result = runner.invoke(app, ["data", "membership", "--data-dir", str(tmp_path)])
     assert result.exit_code == 1
     assert "offline" in result.output
+
+
+def test_data_membership_has_no_ref_option(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["data", "membership", "--data-dir", str(tmp_path), "--ref", "x"])
+    assert result.exit_code != 0
+    assert "No such option" in result.output
