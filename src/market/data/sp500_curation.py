@@ -62,15 +62,22 @@ class Curation:
         Ticker changes after 2019, sorted by date.
     ``corrections``
         Events the upstream files miss or mislabel.
+    ``re_entries``
+        ``(day, ticker)`` adds where a former member, still listed and still labelled
+        ``ticker``, rejoins the index: the same security, a new membership interval.
     ``reused_ticker_adds``
-        ``(day, ticker)`` adds that are a *new* security even though an earlier security
-        still holds the ticker label. By default an add of a ticker still held by a
-        listed non-member is a re-entry of that security.
+        ``(day, ticker)`` adds that are a *new* security even though a former member
+        still holds the ticker label; that label is closed on ``day``.
+
+    An add of a ticker still held by a listed former member is ambiguous, so it must be
+    in exactly one of ``re_entries`` and ``reused_ticker_adds``; otherwise the build
+    fails. An add of a free ticker is a new security.
     """
 
     aliases: Mapping[str, str] = field(default_factory=dict[str, str])
     renames: tuple[Rename, ...] = ()
     corrections: tuple[Correction, ...] = ()
+    re_entries: frozenset[tuple[date, str]] = frozenset()
     reused_ticker_adds: frozenset[tuple[date, str]] = frozenset()
 
 
@@ -147,4 +154,31 @@ CORRECTIONS: tuple[Correction, ...] = (
     ),
 )
 
-CURATION = Curation(aliases=ALIASES, renames=RENAMES, corrections=CORRECTIONS)
+# Former members that rejoined after 2019 under the ticker they still held. Each was
+# checked to be the same company as the earlier member (the original file labels it with
+# its ~2019 ticker, so e.g. MetroPCS appears as TMUS).
+RE_ENTRIES: frozenset[tuple[date, str]] = frozenset(
+    {
+        (date(2019, 7, 15), "TMUS"),  # T-Mobile US (as MetroPCS, member 2009-2013)
+        (date(2019, 8, 9), "LDOS"),  # Leidos (as SAIC, member 2009-2013)
+        (date(2020, 9, 21), "TER"),  # Teradyne (member 1999-2013)
+        (date(2021, 4, 20), "PTC"),  # PTC (as Parametric Technology, member 1997-2007)
+        (date(2022, 6, 21), "KDP"),  # Keurig Dr Pepper (as Dr Pepper Snapple, 2008-2018)
+        (date(2022, 10, 3), "EQT"),  # EQT (member 2008-2018)
+        (date(2022, 10, 3), "PCG"),  # PG&E (removed 2019-01 in its bankruptcy)
+        (date(2022, 12, 19), "FSLR"),  # First Solar (member 2009-2017)
+        (date(2023, 12, 18), "JBL"),  # Jabil (member 2001-2014)
+        (date(2026, 2, 9), "CIEN"),  # Ciena (member 2001-2009)
+    }
+)
+
+# Adds of a ticker still labelling a listed former member that are a different company.
+REUSED_TICKER_ADDS: frozenset[tuple[date, str]] = frozenset()
+
+CURATION = Curation(
+    aliases=ALIASES,
+    renames=RENAMES,
+    corrections=CORRECTIONS,
+    re_entries=RE_ENTRIES,
+    reused_ticker_adds=REUSED_TICKER_ADDS,
+)

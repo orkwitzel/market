@@ -45,5 +45,6 @@ TEST_CURATION = Curation(
     aliases={"AET": "AET-199604"},
     renames=(Rename(date(1996, 5, 1), "XYZ", "XYZW"),),
     corrections=(Correction(Change(date(1996, 2, 15), added=("LIN",)), "missing upstream"),),
+    re_entries=frozenset({(date(1996, 8, 1), "BAC")}),
     reused_ticker_adds=frozenset(),
 )

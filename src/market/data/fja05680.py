@@ -242,10 +242,23 @@ def _apply_change(ledger: _Ledger, change: Change, curation: Curation) -> None:
     for ticker in sorted(added):
         if ledger.member_holding(ticker, day) is not None:
             raise ValueError(f"{day}: addition of {ticker}, which is already a member")
+        key = (day, ticker)
         sid = ledger.holder(ticker, day)
-        if sid is not None and (day, ticker) in curation.reused_ticker_adds:
+        if sid is None:
+            if key in curation.re_entries or key in curation.reused_ticker_adds:
+                raise ValueError(
+                    f"{day}: {ticker} is curated as a re-entry or reuse, but no former"
+                    " member holds that ticker"
+                )
+        elif key in curation.reused_ticker_adds:
             ledger.relabel(sid, day, None)
             sid = None
+        elif key not in curation.re_entries:
+            raise ValueError(
+                f"{day}: addition of {ticker}, still the ticker of former member {sid}."
+                " If it is the same company add it to the curated re-entries, otherwise"
+                " to the curated ticker reuses (sp500_curation)."
+            )
         if sid is None:
             sid = f"{ticker}@{day.isoformat()}"
             ledger.new_security(sid, ticker, day)
@@ -264,11 +277,28 @@ def build_membership(
     if changes and changes[0].day <= last:
         raise ValueError(f"changes must start after the last components row ({last})")
 
+    merged = _merged_changes(changes, curation)
+    _check_curated_keys(merged, curation)
     ledger = _Ledger()
     _ingest_snapshots(ledger, snapshots, curation)
-    for change in _merged_changes(changes, curation):
+    for change in merged:
         _apply_change(ledger, change, curation)
     return ledger.to_membership()
+
+
+def _check_curated_keys(changes: list[Change], curation: Curation) -> None:
+    """Every curated rename, re-entry and reuse matches an event in ``changes``."""
+    adds = {(change.day, ticker) for change in changes for ticker in change.added}
+    both = curation.re_entries & curation.reused_ticker_adds
+    if both:
+        raise ValueError(f"curated as both a re-entry and a ticker reuse: {sorted(both)}")
+    stale = sorted((curation.re_entries | curation.reused_ticker_adds) - adds)
+    if stale:
+        raise ValueError(f"curated re-entries or reuses with no matching add: {stale}")
+    days = {change.day for change in changes}
+    for rename in curation.renames:
+        if rename.day not in days:
+            raise ValueError(f"{rename.day}: rename {rename.old}->{rename.new} has no change")
 
 
 def raw_url(path: str, ref: str = PINNED_REF) -> str:

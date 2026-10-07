@@ -173,7 +173,11 @@ def test_correction_adds_a_missing_member() -> None:
 
 
 def test_curated_ticker_reuse_closes_the_old_label() -> None:
-    curation = replace(TEST_CURATION, reused_ticker_adds=frozenset({(date(1996, 8, 1), "BAC")}))
+    curation = replace(
+        TEST_CURATION,
+        re_entries=frozenset(),
+        reused_ticker_adds=frozenset({(date(1996, 8, 1), "BAC")}),
+    )
     membership = build(curation=curation)
     assert membership.securities_for_ticker("BAC", date(1996, 8, 1)) == ["BAC@1996-08-01"]
     assert membership.ticker_of("BAC", date(1996, 8, 1)) is None
@@ -224,6 +228,40 @@ def test_adding_a_current_member_is_an_error() -> None:
 def test_rename_missing_from_the_changes_is_an_error() -> None:
     curation = replace(TEST_CURATION, renames=(Rename(date(1996, 6, 3), "BAC", "BOA"),))
     with pytest.raises(ValueError, match="rename"):
+        build(curation=curation)
+
+
+def test_uncurated_re_entry_is_an_error() -> None:
+    curation = replace(TEST_CURATION, re_entries=frozenset())
+    with pytest.raises(ValueError, match=r"former member BAC\..*curated re-entries"):
+        build(curation=curation)
+
+
+def test_curated_re_entry_without_a_former_member_is_an_error() -> None:
+    curation = replace(
+        TEST_CURATION, re_entries=TEST_CURATION.re_entries | {(date(1996, 9, 3), "ZED")}
+    )
+    with pytest.raises(ValueError, match="no former member holds"):
+        build(curation=curation)
+
+
+@pytest.mark.parametrize("field", ["re_entries", "reused_ticker_adds"])
+def test_curated_add_missing_from_the_changes_is_an_error(field: str) -> None:
+    extra = frozenset({(date(1996, 8, 2), "BAC")})
+    curation = replace(TEST_CURATION, **{field: getattr(TEST_CURATION, field) | extra})
+    with pytest.raises(ValueError, match="no matching add"):
+        build(curation=curation)
+
+
+def test_curated_as_both_re_entry_and_reuse_is_an_error() -> None:
+    curation = replace(TEST_CURATION, reused_ticker_adds=TEST_CURATION.re_entries)
+    with pytest.raises(ValueError, match="both"):
+        build(curation=curation)
+
+
+def test_rename_on_a_day_without_changes_is_an_error() -> None:
+    curation = replace(TEST_CURATION, renames=(Rename(date(1996, 5, 2), "XYZ", "XYZW"),))
+    with pytest.raises(ValueError, match="has no change"):
         build(curation=curation)
 
 
