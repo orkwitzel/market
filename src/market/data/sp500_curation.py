@@ -31,13 +31,23 @@ class Rename:
 
 
 @dataclass(frozen=True)
-class Correction:
-    """Extra adds and removes merged into the changes on ``day``, with the reason."""
+class Change:
+    """Tickers added to and removed from the index on ``day``, normalized and sorted.
+
+    One row of upstream's changes file, or the events of a curated correction.
+    """
 
     day: date
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
-    reason: str = ""
+
+
+@dataclass(frozen=True)
+class Correction:
+    """A ``change`` the upstream files miss or mislabel, merged into them, and why."""
+
+    change: Change
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -121,17 +131,14 @@ RENAMES: tuple[Rename, ...] = (
 
 CORRECTIONS: tuple[Correction, ...] = (
     Correction(
-        date(2018, 10, 31),
-        added=("LIN",),
+        Change(date(2018, 10, 31), added=("LIN",)),
         reason=(
             "Linde plc replaced Praxair (PX-201810) on 2018-10-31; the original file has no"
             " LIN and the changes file starts in 2019, so upstream patches it in separately."
         ),
     ),
     Correction(
-        date(2020, 3, 3),
-        added=("IR",),
-        removed=("IR",),
+        Change(date(2020, 3, 3), added=("IR",), removed=("IR",)),
         reason=(
             "The changes file records add TT / remove XEC. In fact Ingersoll-Rand plc (IR, a"
             " member) renamed itself Trane Technologies (TT), and Gardner Denver took the IR"

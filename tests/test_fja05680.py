@@ -260,7 +260,7 @@ def test_curated_renames_are_dated_and_unique() -> None:
 def test_curated_corrections_explain_themselves() -> None:
     for correction in CURATION.corrections:
         assert correction.reason
-        assert correction.added or correction.removed
+        assert correction.change.added or correction.change.removed
 
 
 def test_pinned_ref_is_a_commit_sha() -> None:

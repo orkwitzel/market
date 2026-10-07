@@ -13,7 +13,7 @@ ticker reused; ``BAC`` leaves and re-enters; ``LIN`` is added by a correction.
 
 from datetime import date
 
-from market.data.sp500_curation import Correction, Curation, Rename
+from market.data.sp500_curation import Change, Correction, Curation, Rename
 
 COMPONENTS = "\r\n".join(
     [
@@ -44,6 +44,6 @@ CHANGES = "\n".join(
 TEST_CURATION = Curation(
     aliases={"AET": "AET-199604"},
     renames=(Rename(date(1996, 5, 1), "XYZ", "XYZW"),),
-    corrections=(Correction(date(1996, 2, 15), added=("LIN",), reason="missing upstream"),),
+    corrections=(Correction(Change(date(1996, 2, 15), added=("LIN",)), "missing upstream"),),
     reused_ticker_adds=frozenset(),
 )

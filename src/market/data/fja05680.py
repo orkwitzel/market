@@ -35,7 +35,7 @@ from urllib.parse import quote
 import polars as pl
 
 from market.data.membership import MEMBERSHIP_SCHEMA, TICKERS_SCHEMA, Membership, interval_holds
-from market.data.sp500_curation import CURATION, Curation
+from market.data.sp500_curation import CURATION, Change, Curation
 
 SOURCE_REPO = "fja05680/sp500"
 # Upstream commit the store is built from ("2026-09-07 update"). Pinned so a rebuild is
@@ -54,15 +54,6 @@ class Snapshot:
 
     day: date
     symbols: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Change:
-    """One row of the changes file: normalized tickers added and removed on ``day``."""
-
-    day: date
-    added: tuple[str, ...]
-    removed: tuple[str, ...]
 
 
 def normalize_ticker(ticker: str) -> str:
@@ -141,6 +132,21 @@ class _Ledger:
     open_since: dict[str, date] = field(default_factory=dict[str, date])
     labels: dict[str, list[_Label]] = field(default_factory=dict[str, list[_Label]])
 
+    def knows(self, sid: str) -> bool:
+        return sid in self.labels
+
+    def is_member(self, sid: str) -> bool:
+        return sid in self.open_since
+
+    def new_security(self, sid: str, ticker: str, day: date, end: date | None = None) -> None:
+        """Register ``sid`` with its first label ``ticker`` from ``day`` until ``end``."""
+        if sid in self.labels:
+            raise ValueError(f"{day}: security {sid} already exists")
+        self.labels[sid] = [_Label(ticker, day, end)]
+
+    def current_label(self, sid: str) -> _Label:
+        return self.labels[sid][-1]
+
     def holder(self, ticker: str, day: date) -> str | None:
         """The security whose current label is ``ticker`` on ``day``, if any."""
         holders = sorted(
@@ -151,6 +157,11 @@ class _Ledger:
         if len(holders) > 1:
             raise ValueError(f"{day}: ticker {ticker} is ambiguous between {holders}")
         return holders[0] if holders else None
+
+    def member_holding(self, ticker: str, day: date) -> str | None:
+        """The current index member labelled ``ticker`` on ``day``, if any."""
+        sid = self.holder(ticker, day)
+        return sid if sid is not None and self.is_member(sid) else None
 
     def join(self, sid: str, day: date) -> None:
         self.open_since[sid] = day
@@ -186,11 +197,11 @@ def _ingest_snapshots(ledger: _Ledger, snapshots: list[Snapshot], curation: Cura
             ledger.leave(sid, snapshot.day)
         for sid in sorted(current - previous):
             ledger.join(sid, snapshot.day)
-            ticker, delisted = split_symbol(sid)
-            if sid not in ledger.labels:
-                ledger.labels[sid] = [_Label(ticker, snapshot.day, delisted)]
+            if not ledger.knows(sid):
+                ticker, delisted = split_symbol(sid)
+                ledger.new_security(sid, ticker, snapshot.day, delisted)
         for sid in sorted(current):
-            delisted = ledger.labels[sid][-1].end
+            delisted = ledger.current_label(sid).end
             if delisted is not None and snapshot.day >= delisted:
                 raise ValueError(f"{sid} is listed on {snapshot.day}, after its delisting")
         previous = current
@@ -198,7 +209,7 @@ def _ingest_snapshots(ledger: _Ledger, snapshots: list[Snapshot], curation: Cura
 
 def _merged_changes(changes: list[Change], curation: Curation) -> list[Change]:
     by_day: dict[date, tuple[set[str], set[str]]] = {}
-    for change in [*changes, *(Change(c.day, c.added, c.removed) for c in curation.corrections)]:
+    for change in [*changes, *(c.change for c in curation.corrections)]:
         added, removed = by_day.setdefault(change.day, (set(), set()))
         added.update(change.added)
         removed.update(change.removed)
@@ -215,8 +226,8 @@ def _apply_change(ledger: _Ledger, change: Change, curation: Curation) -> None:
     for rename in (r for r in curation.renames if r.day == day):
         if rename.old not in removed or rename.new not in added:
             raise ValueError(f"{day}: rename {rename.old}->{rename.new} is not in the changes")
-        sid = ledger.holder(rename.old, day)
-        if sid is None or sid not in ledger.open_since:
+        sid = ledger.member_holding(rename.old, day)
+        if sid is None:
             raise ValueError(f"{day}: rename of {rename.old}, which is not a member")
         if ledger.holder(rename.new, day) is not None:
             raise ValueError(f"{day}: rename to {rename.new}, which is already in use")
@@ -224,20 +235,20 @@ def _apply_change(ledger: _Ledger, change: Change, curation: Curation) -> None:
         removed.discard(rename.old)
         added.discard(rename.new)
     for ticker in sorted(removed):
-        sid = ledger.holder(ticker, day)
-        if sid is None or sid not in ledger.open_since:
+        sid = ledger.member_holding(ticker, day)
+        if sid is None:
             raise ValueError(f"{day}: removal of {ticker}, which is not a member")
         ledger.leave(sid, day)
     for ticker in sorted(added):
-        sid = ledger.holder(ticker, day)
-        if sid is not None and sid in ledger.open_since:
+        if ledger.member_holding(ticker, day) is not None:
             raise ValueError(f"{day}: addition of {ticker}, which is already a member")
+        sid = ledger.holder(ticker, day)
         if sid is not None and (day, ticker) in curation.reused_ticker_adds:
             ledger.relabel(sid, day, None)
             sid = None
         if sid is None:
             sid = f"{ticker}@{day.isoformat()}"
-            ledger.labels[sid] = [_Label(ticker, day, None)]
+            ledger.new_security(sid, ticker, day)
         ledger.join(sid, day)
 
 
