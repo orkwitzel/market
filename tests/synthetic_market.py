@@ -17,10 +17,8 @@ Schemas (all frames sorted by their key columns):
 
 ``securities``
     security_id: Utf8, name: Utf8
-``tickers``
-    security_id: Utf8, ticker: Utf8, start_date: Date, end_date: Date (nullable)
-``membership``
-    security_id: Utf8, start_date: Date, end_date: Date (nullable)
+``tickers``, ``membership``
+    The store schemas of ``market.data.membership`` (imported, not duplicated).
 ``prices`` (raw daily OHLCV, never adjusted)
     security_id: Utf8, date: Date, open: Float64, high: Float64, low: Float64,
     close: Float64, volume: Int64
@@ -54,6 +52,8 @@ from datetime import date, timedelta
 import numpy as np
 import polars as pl
 
+from market.data.membership import MEMBERSHIP_SCHEMA, TICKERS_SCHEMA
+
 DATA_START = date(2020, 1, 2)
 DATA_END = date(2020, 6, 30)
 HOLIDAYS = frozenset(
@@ -86,9 +86,6 @@ DELISTED_ID = "S5"
 REUSED_TICKER_ID = "S6"
 
 SECURITIES_SCHEMA = pl.Schema({"security_id": pl.Utf8, "name": pl.Utf8})
-INTERVAL_SCHEMA = {"start_date": pl.Date, "end_date": pl.Date}
-TICKERS_SCHEMA = pl.Schema({"security_id": pl.Utf8, "ticker": pl.Utf8, **INTERVAL_SCHEMA})
-MEMBERSHIP_SCHEMA = pl.Schema({"security_id": pl.Utf8, **INTERVAL_SCHEMA})
 PRICES_SCHEMA = pl.Schema(
     {
         "security_id": pl.Utf8,

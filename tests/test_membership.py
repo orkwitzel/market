@@ -22,7 +22,7 @@ from synthetic_market import (
     next_trading_day,
 )
 
-from market.data.membership import EVENTS_SCHEMA, JOIN, LEAVE, Membership
+from market.data.membership import EVENTS_SCHEMA, EventKind, Membership
 
 
 @pytest.fixture
@@ -60,10 +60,18 @@ def test_members_on_is_open_ended_after_the_last_change(membership: Membership) 
     assert _ids(far) == [SPLIT_ID, DIVIDEND_ID, RENAMED_ID, REUSED_TICKER_ID]
 
 
-def test_members_on_before_coverage_is_an_error(membership: Membership) -> None:
+def test_every_query_before_coverage_is_an_error(membership: Membership) -> None:
     assert membership.first_date == DATA_START
-    with pytest.raises(ValueError, match="before"):
-        membership.members_on(DATA_START - timedelta(days=1))
+    before = DATA_START - timedelta(days=1)
+    queries = [
+        lambda: membership.members_on(before),
+        lambda: membership.events_between(before, DATA_START),
+        lambda: membership.securities_for_ticker("ALFA", before),
+        lambda: membership.ticker_of(SPLIT_ID, before),
+    ]
+    for query in queries:
+        with pytest.raises(ValueError, match="before membership data begins"):
+            query()
 
 
 def test_reused_ticker_resolves_by_date(
@@ -85,13 +93,14 @@ def test_events_between(membership: Membership, synthetic_market: SyntheticMarke
     delist_end = next_trading_day(synthetic_market.trading_days, DELIST_LAST_DATE)
     events = membership.events_between(date(2020, 3, 1), date(2020, 6, 30))
     assert events.schema == EVENTS_SCHEMA
+    assert EVENTS_SCHEMA["event"] == pl.Enum(["join", "leave"])
     # Sorted by date, then security id; in the fixture all three April events share a day.
     assert delist_end == REMOVAL_DATE == JOIN_DATE
     assert events.rows() == [
-        (REMOVAL_DATE, REMOVED_ID, "CHRL", LEAVE),
-        (JOIN_DATE, RENAMED_ID, "DLTA", JOIN),
-        (delist_end, DELISTED_ID, "ECHO", LEAVE),
-        (REUSE_JOIN_DATE, REUSED_TICKER_ID, "ECHO", JOIN),
+        (REMOVAL_DATE, REMOVED_ID, "CHRL", EventKind.LEAVE),
+        (JOIN_DATE, RENAMED_ID, "DLTA", EventKind.JOIN),
+        (delist_end, DELISTED_ID, "ECHO", EventKind.LEAVE),
+        (REUSE_JOIN_DATE, REUSED_TICKER_ID, "ECHO", EventKind.JOIN),
     ]
 
 
@@ -105,7 +114,7 @@ def test_events_between_includes_both_ends(membership: Membership) -> None:
 
 def test_initial_members_join_on_the_first_date(membership: Membership) -> None:
     events = membership.events_between(DATA_START, DATA_START)
-    assert set(events["event"]) == {JOIN}
+    assert set(events["event"]) == {EventKind.JOIN}
     assert _ids(events) == _ids(membership.members_on(DATA_START))
 
 
@@ -128,3 +137,40 @@ def test_save_and_load_round_trip(membership: Membership, tmp_path: Path) -> Non
     loaded = Membership.load(tmp_path / "membership")
     assert loaded.tickers.equals(membership.tickers)
     assert loaded.membership.equals(membership.membership)
+
+
+def test_save_replaces_an_existing_store(membership: Membership, tmp_path: Path) -> None:
+    target = tmp_path / "membership"
+    target.mkdir()
+    (target / "stale.txt").write_text("old")
+    membership.save(target)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["membership"]
+    assert not (target / "stale.txt").exists()
+    assert Membership.load(target).membership.equals(membership.membership)
+
+
+def test_interrupted_save_keeps_the_old_store(
+    membership: Membership, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "membership"
+    membership.save(target)
+    shorter = Membership(tickers=membership.tickers, membership=membership.membership.head(1))
+
+    real_write = pl.DataFrame.write_parquet
+    calls: list[Path] = []
+
+    def write_then_crash(self: pl.DataFrame, file: Path) -> None:
+        calls.append(file)
+        if len(calls) == 2:  # the first file is written, the second never is
+            raise OSError("disk full")
+        real_write(self, file)
+
+    monkeypatch.setattr(pl.DataFrame, "write_parquet", write_then_crash)
+    with pytest.raises(OSError, match="disk full"):
+        shorter.save(target)
+    monkeypatch.undo()
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["membership"]
+    loaded = Membership.load(target)
+    assert loaded.membership.equals(membership.membership)
+    assert loaded.tickers.equals(membership.tickers)

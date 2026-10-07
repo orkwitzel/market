@@ -15,32 +15,57 @@ longer holds); a null ``end_date`` means still open at the end of the data, so q
 after the last known change carry the last state forward. Dates are calendar dates: a
 query on a non-trading day returns the state in force on that day.
 
+Ticker labels are only as precise as their source. In the fja05680 build (ADR 0010) a
+security from the original file is labelled with its ~2019 ticker for its whole history,
+so before 2019 the label is not necessarily the ticker the stock traded under that day.
+
 The store is a directory of Parquet files under the gitignored ``data/`` (ADR 0007).
 """
 
+import shutil
+import tempfile
 from datetime import date, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Self
 
 import polars as pl
+
+
+class EventKind(StrEnum):
+    """What happened to a security's index membership on an event date."""
+
+    JOIN = "join"
+    LEAVE = "leave"
+
 
 INTERVAL_SCHEMA = {"start_date": pl.Date, "end_date": pl.Date}
 MEMBERSHIP_SCHEMA = pl.Schema({"security_id": pl.Utf8, **INTERVAL_SCHEMA})
 TICKERS_SCHEMA = pl.Schema({"security_id": pl.Utf8, "ticker": pl.Utf8, **INTERVAL_SCHEMA})
 MEMBERS_SCHEMA = pl.Schema({"security_id": pl.Utf8, "ticker": pl.Utf8})
 EVENTS_SCHEMA = pl.Schema(
-    {"date": pl.Date, "security_id": pl.Utf8, "ticker": pl.Utf8, "event": pl.Utf8}
+    {
+        "date": pl.Date,
+        "security_id": pl.Utf8,
+        "ticker": pl.Utf8,
+        "event": pl.Enum([kind.value for kind in EventKind]),
+    }
 )
-
-JOIN = "join"
-LEAVE = "leave"
 
 MEMBERSHIP_FILE = "membership.parquet"
 TICKERS_FILE = "tickers.parquet"
 
 
-def _active_on(day: date) -> pl.Expr:
-    """Rows whose ``[start_date, end_date)`` interval contains ``day``."""
+def interval_holds(start: date, end: date | None, day: date) -> bool:
+    """Whether the interval ``[start, end)`` (``end`` ``None`` = open) contains ``day``."""
+    return start <= day and (end is None or end > day)
+
+
+def _active_on(day: date | pl.Expr) -> pl.Expr:
+    """Rows whose ``[start_date, end_date)`` interval contains ``day``.
+
+    The expression form of :func:`interval_holds`; ``day`` may be a column expression.
+    """
     return (pl.col("start_date") <= day) & (
         pl.col("end_date").is_null() | (pl.col("end_date") > day)
     )
@@ -64,6 +89,7 @@ class Membership:
     """Point-in-time index membership with dated ticker labels.
 
     Frames are validated and sorted on construction and must be treated as read-only.
+    Every query raises ``ValueError`` for a date before :attr:`first_date`.
     """
 
     def __init__(self, tickers: pl.DataFrame, membership: pl.DataFrame) -> None:
@@ -83,10 +109,17 @@ class Membership:
         assert isinstance(first, date)
         self.first_date: date = first
 
-    def members_on(self, day: date) -> pl.DataFrame:
-        """The index members on ``day`` with their ticker that day, sorted by security id."""
+    def _check_covered(self, day: date) -> None:
         if day < self.first_date:
             raise ValueError(f"{day} is before membership data begins ({self.first_date})")
+
+    def members_on(self, day: date) -> pl.DataFrame:
+        """The index members on ``day`` with their ticker label that day, by security id.
+
+        The label is the store's ticker for that date; see the module docstring for how
+        closely it matches the ticker actually traded then.
+        """
+        self._check_covered(day)
         ids = self.membership.filter(_active_on(day)).select("security_id")
         labels = self.tickers.filter(_active_on(day)).select("security_id", "ticker")
         return ids.join(labels, on="security_id", how="left").sort("security_id")
@@ -95,26 +128,26 @@ class Membership:
         """Joins and leaves dated ``start`` to ``end`` inclusive, sorted by date and security id.
 
         A join is dated its first day in the index; a leave is dated the first day out of it.
-        The ticker is the one the security had on its last day in the index for a leave, and
-        on its first day for a join.
+        The ticker is the label the security had on its last day in the index for a leave,
+        and on its first day for a join.
         """
+        self._check_covered(start)
         dated = pl.col("date").is_between(start, end)
         joins = self.membership.select(
             pl.col("start_date").alias("date"),
             "security_id",
-            pl.lit(JOIN).alias("event"),
+            pl.lit(EventKind.JOIN.value).alias("event"),
             pl.col("start_date").alias("label_day"),
         )
         leaves = self.membership.filter(pl.col("end_date").is_not_null()).select(
             pl.col("end_date").alias("date"),
             "security_id",
-            pl.lit(LEAVE).alias("event"),
+            pl.lit(EventKind.LEAVE.value).alias("event"),
             (pl.col("end_date") - timedelta(days=1)).alias("label_day"),
         )
         events = pl.concat([joins, leaves]).filter(dated)
         labels = events.join(self.tickers, on="security_id", how="inner").filter(
-            (pl.col("start_date") <= pl.col("label_day"))
-            & (pl.col("end_date").is_null() | (pl.col("end_date") > pl.col("label_day")))
+            _active_on(pl.col("label_day"))
         )
         return (
             events.join(
@@ -123,24 +156,46 @@ class Membership:
                 how="left",
             )
             .select(EVENTS_SCHEMA.names())
+            .cast({"event": EVENTS_SCHEMA["event"]})
             .sort("date", "security_id")
         )
 
     def securities_for_ticker(self, ticker: str, day: date) -> list[str]:
         """The securities labelled ``ticker`` on ``day``, sorted. Usually zero or one."""
+        self._check_covered(day)
         rows = self.tickers.filter((pl.col("ticker") == ticker) & _active_on(day))
         return sorted(rows["security_id"].to_list())
 
     def ticker_of(self, security_id: str, day: date) -> str | None:
-        """The ticker of ``security_id`` on ``day``, or ``None`` if it has none then."""
+        """The ticker label of ``security_id`` on ``day``, or ``None`` if it has none then."""
+        self._check_covered(day)
         rows = self.tickers.filter((pl.col("security_id") == security_id) & _active_on(day))
         return rows["ticker"].item() if rows.height else None
 
     def save(self, directory: Path) -> None:
-        """Write the store as Parquet files into ``directory`` (created if needed)."""
-        directory.mkdir(parents=True, exist_ok=True)
-        self.membership.write_parquet(directory / MEMBERSHIP_FILE)
-        self.tickers.write_parquet(directory / TICKERS_FILE)
+        """Write the store as Parquet files into ``directory``, replacing any old store.
+
+        Both files are written into a temporary sibling directory that is then renamed
+        into place, so an interrupted save leaves either the old pair, the new pair or no
+        store, never a mismatched pair.
+        """
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{directory.name}.new-", dir=directory.parent))
+        try:
+            self.membership.write_parquet(staging / MEMBERSHIP_FILE)
+            self.tickers.write_parquet(staging / TICKERS_FILE)
+            if directory.exists():
+                retired = Path(
+                    tempfile.mkdtemp(prefix=f".{directory.name}.old-", dir=directory.parent)
+                )
+                directory.rename(retired / directory.name)
+                staging.rename(directory)
+                shutil.rmtree(retired)
+            else:
+                staging.rename(directory)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging)
 
     @classmethod
     def load(cls, directory: Path) -> Self:

@@ -21,7 +21,7 @@ from market.data.fja05680 import (
     raw_url,
     split_symbol,
 )
-from market.data.membership import JOIN, LEAVE, Membership
+from market.data.membership import EventKind, Membership
 from market.data.sp500_curation import CURATION, Curation, Rename
 
 
@@ -183,13 +183,13 @@ def test_curated_ticker_reuse_closes_the_old_label() -> None:
 def test_events_between() -> None:
     events = build().events_between(date(1996, 4, 1), date(1996, 9, 3))
     assert events.select("date", "security_id", "event").rows() == [
-        (date(1996, 4, 1), "AET-199604", LEAVE),
-        (date(1996, 4, 1), "OLD@1996-04-01", JOIN),
-        (date(1996, 6, 3), "XYZ@1996-06-03", JOIN),
-        (date(1996, 7, 1), "BAC", LEAVE),
-        (date(1996, 8, 1), "BAC", JOIN),
-        (date(1996, 9, 3), "OLD@1996-04-01", LEAVE),
-        (date(1996, 9, 3), "ZED@1996-09-03", JOIN),
+        (date(1996, 4, 1), "AET-199604", EventKind.LEAVE),
+        (date(1996, 4, 1), "OLD@1996-04-01", EventKind.JOIN),
+        (date(1996, 6, 3), "XYZ@1996-06-03", EventKind.JOIN),
+        (date(1996, 7, 1), "BAC", EventKind.LEAVE),
+        (date(1996, 8, 1), "BAC", EventKind.JOIN),
+        (date(1996, 9, 3), "OLD@1996-04-01", EventKind.LEAVE),
+        (date(1996, 9, 3), "ZED@1996-09-03", EventKind.JOIN),
     ]
 
 

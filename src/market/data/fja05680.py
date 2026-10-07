@@ -34,7 +34,7 @@ from urllib.parse import quote
 
 import polars as pl
 
-from market.data.membership import MEMBERSHIP_SCHEMA, TICKERS_SCHEMA, Membership
+from market.data.membership import MEMBERSHIP_SCHEMA, TICKERS_SCHEMA, Membership, interval_holds
 from market.data.sp500_curation import CURATION, Curation
 
 SOURCE_REPO = "fja05680/sp500"
@@ -128,7 +128,7 @@ class _Label:
     end: date | None
 
     def holds(self, day: date) -> bool:
-        return self.start <= day and (self.end is None or self.end > day)
+        return interval_holds(self.start, self.end, day)
 
 
 @dataclass
