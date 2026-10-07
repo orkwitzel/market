@@ -33,7 +33,7 @@ src/market/
   overlays/     volatility targeting, drawdown brake
   report/       metrics and the CLI summary
   api/          FastAPI app, run worker, run history
-  cli.py        `market run | serve | data update`
+  cli.py        `market run | serve | data update | data membership`
 web/            React frontend
 tests/          pytest suite (synthetic data only), incl. the look-ahead test
 docs/adr/       architecture decision records
