@@ -8,7 +8,8 @@ is built, so a stale entry fails the build instead of silently doing nothing.
 All tickers here are in normalized (price-source) form: ``BRK-B``, not ``BRK.B``.
 Maintenance: after bumping ``fja05680.PINNED_REF``, review every new same-day
 remove-and-add pair in ``sp500_changes_since_2019.csv``; a pure ticker change belongs in
-``RENAMES``, otherwise it is a real index change.
+``RENAMES``, otherwise it is a real index change. A build failure on an add of a former
+member's ticker means a new case for ``RE_ENTRIES`` or ``REUSED_TICKER_ADDS``.
 """
 
 from collections.abc import Mapping
@@ -128,11 +129,10 @@ RENAMES: tuple[Rename, ...] = (
     Rename(date(2024, 2, 1), "CDAY", "DAY"),  # Ceridian -> Dayforce
     Rename(date(2024, 3, 4), "PEAK", "DOC"),  # Healthpeak (survived the Physicians Realty merger)
     Rename(date(2024, 3, 25), "FLT", "CPAY"),  # FleetCor -> Corpay
-    # The four below are inferred from same-day pairs and the current Wikipedia list, which
-    # gives the new ticker the old one's index date; not independently verified.
-    Rename(date(2025, 11, 11), "FI", "FISV"),  # Fiserv, back to FISV
-    Rename(date(2026, 1, 14), "MMC", "MRSH"),  # Marsh McLennan
-    Rename(date(2026, 5, 21), "BK", "BNY"),  # Bank of New York Mellon -> BNY
+    # The four below were checked against the companies' own announcements (ADR 0010).
+    Rename(date(2025, 11, 11), "FI", "FISV"),  # Fiserv, back to FISV on moving to Nasdaq
+    Rename(date(2026, 1, 14), "MMC", "MRSH"),  # Marsh McLennan, rebranding as Marsh
+    Rename(date(2026, 5, 21), "BK", "BNY"),  # The Bank of New York Mellon Corporation
     Rename(date(2026, 6, 24), "SATS", "ECHO"),  # EchoStar
 )
 

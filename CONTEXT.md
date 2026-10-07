@@ -21,7 +21,14 @@ Decisions behind these terms live in [`docs/adr/`](docs/adr/).
 ### Universe and data
 
 - **Universe** — the stocks the bot may trade on a given date: the members of the S&P 500 on that date (point-in-time membership) that have price data. ETFs are not in the universe.
-- **Security** — one company's listed stock, identified by a stable security id that never changes. A ticker is only a label for a period: a security can change ticker, and a reused ticker belongs to two different securities. _Avoid_: using the ticker as an identifier.
+- **Security** — one company's listed stock, identified by a stable security id. The id survives ticker changes, index exits and re-entries, and every rebuild from the pinned membership source; only a deliberate migration to a new membership source could change it (ADR 0010). A ticker is only a label for a period: a security can change ticker, and a reused ticker belongs to two different securities. _Avoid_: using the ticker as an identifier.
+- **Ticker label** — the ticker a security is known by for a dated period. Labels come from the membership source and may not be the ticker traded that day: before 2019 they are the ~2019 tickers (ADR 0010). _Avoid_: "the ticker" as if it were an as-of fact.
+- **Ticker reuse** — a ticker passing from one security to a different, later one (old BankAmerica `BAC-199809` vs `BAC`; `DOW` in 2019).
+- **Rename** — a security changing its ticker label without leaving the index (`FB` → `META`). Not a leave plus a join.
+- **Re-entry** — a former member rejoining the index as the same security, starting a new membership interval (PG&E in 2022).
+- **Alias** — a second source symbol for the same security, folded into it (fja05680 lists Aetna as both `AET` and `AET-201811` in 2016-2018).
+- **Curation** — the hand-maintained identity fixes applied when building membership: aliases, renames, re-entries, ticker reuses and corrections (missing or mislabelled events, each with a reason). Every entry must match the data, or the build fails.
+- **Join / leave event** — a security entering or exiting the index, dated its first day in or its first day out. Renames are not events.
 - **Point-in-time membership** — index membership as it actually was on each historical date, including companies that later went bankrupt, were acquired or were removed.
 - **Survivorship bias** — the distortion caused by only looking at companies that survived to today. The point-in-time universe exists to avoid it.
 - **Coverage** — the share of index members on a date that have usable price data. A run may only have a drop date where coverage (through the warm-up) is at least the **coverage threshold** (default 85%).
