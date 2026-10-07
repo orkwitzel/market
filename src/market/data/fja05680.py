@@ -277,6 +277,7 @@ def build_membership(
     if changes and changes[0].day <= last:
         raise ValueError(f"changes must start after the last components row ({last})")
 
+    _check_early_corrections(snapshots, curation)
     merged = _merged_changes(changes, curation)
     _check_curated_keys(merged, curation)
     ledger = _Ledger()
@@ -284,6 +285,44 @@ def build_membership(
     for change in merged:
         _apply_change(ledger, change, curation)
     return ledger.to_membership()
+
+
+def _check_early_corrections(snapshots: list[Snapshot], curation: Curation) -> None:
+    """Corrections dated within the original file may only add what it never lists later.
+
+    Snapshots define membership up to their last row, so a correction dated in that range
+    is applied on top of them. It is safe only if it adds a ticker that no original-file
+    security uses from its date on (Linde plc in 2018): not listed in a later snapshot and
+    not the still-open label of an earlier one. A remove, or any other add, would
+    contradict the snapshots.
+    """
+    first, last = snapshots[0].day, snapshots[-1].day
+    last_seen: dict[str, date] = {}
+    for snapshot in snapshots:
+        for symbol in snapshot.symbols:
+            last_seen[curation.aliases.get(symbol, symbol)] = snapshot.day
+    for correction in curation.corrections:
+        change = correction.change
+        if change.day > last:
+            continue
+        if change.day < first:
+            raise ValueError(f"{change.day}: correction before the first components row")
+        if change.removed:
+            raise ValueError(
+                f"{change.day}: correction removes {list(change.removed)} within the"
+                f" components file (up to {last}), which already lists every member"
+            )
+        in_use: set[str] = set()
+        for symbol, seen in last_seen.items():
+            ticker, delisted = split_symbol(symbol)
+            if seen >= change.day or delisted is None or delisted > change.day:
+                in_use.add(ticker)
+        clash = sorted(in_use.intersection(change.added))
+        if clash:
+            raise ValueError(
+                f"{change.day}: correction adds {clash}, a ticker the components file"
+                " still uses on or after that date"
+            )
 
 
 def _check_curated_keys(changes: list[Change], curation: Curation) -> None:

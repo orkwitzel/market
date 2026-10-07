@@ -22,7 +22,7 @@ from market.data.fja05680 import (
     split_symbol,
 )
 from market.data.membership import EventKind, Membership
-from market.data.sp500_curation import CURATION, Curation, Rename
+from market.data.sp500_curation import CURATION, Correction, Curation, Rename
 
 
 def build(
@@ -165,7 +165,8 @@ def test_ticker_freed_by_a_rename_or_delisting_is_a_new_security() -> None:
     assert membership.securities_for_ticker("OLD", date(1996, 4, 1)) == ["OLD@1996-04-01"]
 
 
-def test_correction_adds_a_missing_member() -> None:
+def test_correction_within_the_snapshots_adds_a_missing_member() -> None:
+    # Like Linde plc in 2018: dated before the last snapshot, a ticker no snapshot uses.
     membership = build()
     assert "LIN@1996-02-15" not in ids_on(membership, date(1996, 2, 14))
     assert "LIN@1996-02-15" in ids_on(membership, date(1996, 2, 15))
@@ -262,6 +263,37 @@ def test_curated_as_both_re_entry_and_reuse_is_an_error() -> None:
 def test_rename_on_a_day_without_changes_is_an_error() -> None:
     curation = replace(TEST_CURATION, renames=(Rename(date(1996, 5, 2), "XYZ", "XYZW"),))
     with pytest.raises(ValueError, match="has no change"):
+        build(curation=curation)
+
+
+def test_correction_within_the_snapshots_must_not_clash_with_them() -> None:
+    clash = Correction(Change(date(1996, 1, 20), added=("XYZ",)), "clash")
+    curation = replace(TEST_CURATION, corrections=(clash,))
+    with pytest.raises(ValueError, match="still uses"):
+        build(curation=curation)
+
+
+def test_correction_within_the_snapshots_must_not_remove() -> None:
+    removal = Correction(Change(date(1996, 1, 20), removed=("BAC",)), "removal")
+    curation = replace(TEST_CURATION, corrections=(removal,))
+    with pytest.raises(ValueError, match="correction removes"):
+        build(curation=curation)
+
+
+def test_correction_before_the_first_snapshot_is_an_error() -> None:
+    early = Correction(Change(date(1995, 12, 29), added=("LIN",)), "too early")
+    curation = replace(TEST_CURATION, corrections=(early,))
+    with pytest.raises(ValueError, match="before the first components row"):
+        build(curation=curation)
+
+
+@pytest.mark.parametrize("ticker", ["OLD", "BRK-B"])
+def test_correction_within_the_snapshots_must_not_take_a_label_still_in_use(ticker: str) -> None:
+    # OLD-199603 is last listed on 1996-02-01 but keeps its label until 1996-04-01;
+    # BRK.B is listed in later snapshots.
+    late = Correction(Change(date(1996, 2, 15), added=(ticker,)), "label in use")
+    curation = replace(TEST_CURATION, corrections=(late,))
+    with pytest.raises(ValueError, match="still uses"):
         build(curation=curation)
 
 
